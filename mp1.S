@@ -84,38 +84,49 @@ error:
 	ret
 
 mp1_ioctl_add:
+        testl %ebx, %ebx        # if ebx (arg) == null, return error
+        jz error
 
         xorl %edi, %edi         # edi = 16
-        addl $16, %edi
+        addl $16, %edi          # GET RID OF MAGIC NUMBER
         
-        # ??CALLER SAVE??
         push %edi               # push 16
         call mp1_malloc         # allocate new memory
-        testl %eax, %eax        # if eax == null (??is this 0??), return error
+        testl %eax, %eax        # if eax == null, return error
         jz error
 
         movl %eax, %ecx         # copy address of malloc to ecx
-        push %eax               # push address of new malloc
         push %ebx               # push address of source
+        push %eax               # push address of new malloc
         call mp1_copy_from_user  # fill in the new memory
         testl %eax, %eax        # if result != 0, return error
         jnz error_free
 
-        movw 4(%ebx), %ax       # ax = on length
-        movw %ax, 8(%ebx)       # countdown = ax
-        movw $1, 10(%ebx)       # status = 1
-        movl %ecx, mp1_list_head # make struct the head
+        movw ON_LENGTH(%ebx), %ax       # ax = on length
+        movw %ax, COUNTDOWN(%ebx)       # countdown = ax
+        movw $1, STATUS(%ebx)       # status = 1
 
-        cmpw $0, %bx              # check if location is between 0-1999
+        movl mp1_list_head, %edi
+        movl %edi, NEXT(%ecx) # struct->next = current head
+        movl %ecx, mp1_list_head # head = struct
+
+        cmpw $0, (%ebx)         # check if location is between 0-1999
         jb error_free
-        cmpw $1999, %bx
+        cmpw $1999, (%ebx)
         ja error_free
 
-        movb 2(%ebx), %cl       # cl = on_char
-        movw (%ebx), %ax          # eax = location
+        movb ON_CHAR(%ebx), %cl       # cl = on_char
+        movw (%ebx), %ax        # ax = location
+        add %ax, %ax            # multiply location by 2
         call mp1_poke
+
+        xorl %eax, %eax         # return = 0
+        pop %edi                # callee restore
+        pop %esi
+        pop %ebx
         leave
-	ret
+	ret                      
+
         
 mp1_ioctl_remove:
 	ret
