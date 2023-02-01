@@ -159,7 +159,6 @@ error:
 mp1_ioctl_add:
         push %ebp                       # save and update ebp
         movl %esp, %ebp
-
         push %ebx                       # callee save
         push %esi
         push %edi
@@ -174,10 +173,10 @@ mp1_ioctl_add:
 
         movl %eax, %edi                 # copy address of malloc to edi
 
-        push %ebx                       # push address of source
-        push %eax                       # push address of new malloc
-        call mp1_copy_from_user         # fill in the new memory
-        add $12, %esp                  # remove arguments
+        push %ebx                       # push args
+        push %eax                      
+        call mp1_copy_from_user         # copy from user
+        add $12, %esp                   # remove args
         testl %eax, %eax                # if result != 0, return error
         jnz error_free
 
@@ -186,8 +185,8 @@ mp1_ioctl_add:
         movw $1, STATUS(%ebx)           # status = 1
 
         movl mp1_list_head, %ecx        # insert struct at head
-        movl %ecx, NEXT(%edi)           # struct->next = current head
-        movl %edi, mp1_list_head        # head = struct
+        movl %ecx, NEXT(%edi)           
+        movl %edi, mp1_list_head        
 
         cmpw $0, LOCATION(%ebx)                 # check if location is between 0-1999
         jb error_free
@@ -233,7 +232,6 @@ mp1_ioctl_remove:
 mp1_ioctl_find:
         push %ebp                       # save and update ebp
         movl %esp, %ebp
-
         push %ebx                       # callee save
         push %esi
         push %edi
@@ -246,12 +244,11 @@ mp1_ioctl_find:
         testl %eax, %eax                # if eax == null, return error
         jz err_find
 
-        movl %eax, %edi                 # copy address of malloc to edi
-
-        push %ebx                       # push address of source
-        push %eax                       # push address of new malloc
-        call mp1_copy_from_user         # fill in the new memory
-        addl $12, %esp                  # remove arguments
+        movl %eax, %edi                 # copy address of malloc to edi 
+        push %ebx                       # push args
+        push %eax                      
+        call mp1_copy_from_user         # copy from user
+        addl $12, %esp                  # remove args
         testl %eax, %eax                # if result != 0, return error
         jnz err_free_find
 
@@ -289,28 +286,22 @@ find_done:
 mp1_ioctl_sync:
         push %ebp                       # save and update ebp
         movl %esp, %ebp
-
         push %ebx                       # callee save
         push %esi
         push %edi
-        xorl %ebx, %ebx                 # clear regs
-        xorl %esi, %esi
-        xorl %edi, %edi 
 
         movw %bx, %si                   # si = 2nd integer (low 16bits)
         shrl $16, %ebx
         movw %bx, %di                   # di = 1st integer (high 16bits)
 
         push %di                        # push args for search list
-        push mp1_list_head
         call search_list
-        addl $8, %esp                    # pop args
+        addl $4, %esp                    # pop args
         movl %eax, %edi                 # edi = address of struct matching integer 1
 
         push %si                        # push args for search list
-        push mp1_list_head
         call search_list
-        addl $8, %esp                    # pop args
+        addl $4, %esp                    # pop args
         movl %eax, %esi                 # edi = address of struct matching integer 2
 
         movw ON_LENGTH(%edi), %bx         # assign 1's on_length to 2
@@ -329,7 +320,7 @@ stat_one:
 
         cmpw $0, LOCATION(%esi)                 # check if location is between 0-1999
         jb sync_err
-        cmpw $1999, (%ebx)
+        cmpw $1999, LOCATION(%ebx)
         ja sync_err
 
         addw %ax, %ax                           
@@ -342,7 +333,7 @@ stat_zero:
 
         cmpw $0, LOCATION(%esi)                 # check if location is between 0-1999
         jb sync_err
-        cmpw $1999, (%ebx)
+        cmpw $1999, LOCATION(%ebx)
         ja sync_err
 
         addw %ax, %ax
@@ -404,3 +395,4 @@ jumptable:
 
 
 .end
+
