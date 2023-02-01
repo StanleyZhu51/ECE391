@@ -46,11 +46,9 @@ mp1_poke:
 mp1_rtc_tasklet:
         push %ebp                       # save and update ebp
         movl %esp, %ebp
-
         push %ebx                       # callee save
         push %esi
         push %edi
-
         xorl %ebx, %ebx                 # clear regs
         xorl %esi, %esi
         xorl %edi, %edi
@@ -67,7 +65,6 @@ loop:
 # bx = status
 check_status:
         xorl %ebx, %ebx                 # clear regs
-
         movw STATUS(%esi), %bx          # bx = status
         testw %bx, %bx                  # if status == 0, jump to_on
         jz to_on                        # else, jump to_off
@@ -230,6 +227,7 @@ mp1_ioctl_remove:
 # ebx = arg
 # eax = various ret values        
 mp1_ioctl_find:
+        ret
         push %ebp                       # save and update ebp
         movl %esp, %ebp
         push %ebx                       # callee save
@@ -298,11 +296,15 @@ mp1_ioctl_sync:
         push %edi                        # push args for search list
         call search_list
         addl $4, %esp                    # pop args
+        testl %eax, %eax                # if search returns null, error
+        jz sync_err
         movl %eax, %edi                 # edi = address of struct matching integer 1
 
         push %esi                        # push args for search list
         call search_list
         addl $4, %esp                    # pop args
+        testl %eax, %eax                # if search returns null, error
+        jz sync_err
         movl %eax, %esi                 # edi = address of struct matching integer 2
 
         movw ON_LENGTH(%edi), %bx         # assign 1's on_length to 2
@@ -330,6 +332,7 @@ stat_one:
         addw %ax, %ax                           
         call mp1_poke
         movw $0, STATUS(%esi)
+        xorl %eax, %eax                         # return = 0
         jmp sync_done
 stat_zero:
         xorl %eax, %eax                 # clear regs
@@ -346,6 +349,7 @@ stat_zero:
         addw %ax, %ax
         call mp1_poke
         movw $1, STATUS(%esi)
+        xorl %eax, %eax                         # return = 0
         jmp sync_done
 sync_err:                               # return = -1
         movl $-1, %eax
@@ -356,7 +360,7 @@ sync_done:
         leave
         ret
 
-# eax search_list(arg) in c-style convention
+# ret_ptr search_list(arg) in c-style convention
 # return matching ptr 
 # returns null if failed
 # no clobbers
@@ -401,5 +405,3 @@ jumptable:
 
 
 .end
-
-
