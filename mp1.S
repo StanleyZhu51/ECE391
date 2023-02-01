@@ -252,17 +252,17 @@ mp1_ioctl_find:
         testl %eax, %eax                # if result != 0, return error
         jnz err_free_find
 
-        movl LOCATION(%edi), %eax
+        movw LOCATION(%edi), %ax
         push %eax                            # push args for search list
         call search_list
         add $4, %esp                    # pop args
 
-        testl %eax, %eax
+        testl %eax, %eax                # if search returns null, error
         jz err_free_find
 
         push $STRUCT_SIZE               # push args for copy
-        push %ebx
         push %edi
+        push %ebx
         call mp1_copy_to_user
         addl $12, %esp                   # pop args
         testl %eax, %eax                # if result != 0, return error
@@ -284,6 +284,7 @@ find_done:
 	ret
 
 mp1_ioctl_sync:
+        ret
         push %ebp                       # save and update ebp
         movl %esp, %ebp
         push %ebx                       # callee save
@@ -294,12 +295,12 @@ mp1_ioctl_sync:
         shrl $16, %ebx
         movw %bx, %di                   # di = 1st integer (high 16bits)
 
-        push %di                        # push args for search list
+        push %edi                        # push args for search list
         call search_list
         addl $4, %esp                    # pop args
         movl %eax, %edi                 # edi = address of struct matching integer 1
 
-        push %si                        # push args for search list
+        push %esi                        # push args for search list
         call search_list
         addl $4, %esp                    # pop args
         movl %eax, %esi                 # edi = address of struct matching integer 2
@@ -315,12 +316,15 @@ mp1_ioctl_sync:
         testw %bx, %bx                  # if status == 0, add
         jz stat_zero
 stat_one:
+        xorl %eax, %eax                 # clear regs
+        xorb %cl, %cl
+
         movb OFF_CHAR(%esi), %cl                # push args for poke
         movw LOCATION(%esi), %ax
 
         cmpw $0, LOCATION(%esi)                 # check if location is between 0-1999
         jb sync_err
-        cmpw $1999, LOCATION(%ebx)
+        cmpw $1999, LOCATION(%esi)
         ja sync_err
 
         addw %ax, %ax                           
@@ -328,12 +332,15 @@ stat_one:
         movw $0, STATUS(%esi)
         jmp sync_done
 stat_zero:
+        xorl %eax, %eax                 # clear regs
+        xorb %cl, %cl
+
         movb ON_CHAR(%esi), %cl
         movw LOCATION(%esi), %ax
 
         cmpw $0, LOCATION(%esi)                 # check if location is between 0-1999
         jb sync_err
-        cmpw $1999, LOCATION(%ebx)
+        cmpw $1999, LOCATION(%esi)
         ja sync_err
 
         addw %ax, %ax
@@ -356,7 +363,6 @@ sync_done:
 search_list:
         push %ebp                       # save and update ebp
         movl %esp, %ebp
-
         push %ebx                       # callee save
         push %esi
         push %edi
@@ -395,4 +401,5 @@ jumptable:
 
 
 .end
+
 
