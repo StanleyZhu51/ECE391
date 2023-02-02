@@ -164,11 +164,13 @@ mp1_ioctl_add:
         
         push $STRUCT_SIZE                       # push 16
         call mp1_malloc                         # allocate new memory
+        add $4, %esp                           # remove args
         testl %eax, %eax                        # if eax == null, return error
         jz error_add
 
         movl %eax, %edi                         # copy address of malloc to edi
 
+        push $STRUCT_SIZE                       
         push %ebx                               # push args
         push %eax                      
         call mp1_copy_from_user                 # copy from user
@@ -193,7 +195,7 @@ mp1_ioctl_add:
         xorb %cl, %cl
 
         movb ON_CHAR(%ebx), %cl                 # set up args for poke
-        movw (%ebx), %ax                        
+        movw LOCATION(%ebx), %ax                        
         addw %ax, %ax                           # multiply location by 2
         call mp1_poke
 
@@ -232,7 +234,6 @@ error_free:
 # ecx = temp reg
 # eax = various return values
 mp1_ioctl_remove:
-        ret
         push %ebp                               # save and update ebp
         movl %esp, %ebp
         push %ebx                               # callee save
