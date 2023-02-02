@@ -186,16 +186,16 @@ mp1_ioctl_add:
         movl %edi, mp1_list_head  
         movl %ecx, NEXT(%edi)           
               
-        cmpw $0, LOCATION(%ebx)                 # check if location is between 0-1999
+        cmpw $0, LOCATION(%edi)                 # check if location is between 0-1999
         jb error_free
-        cmpw $1999, LOCATION(%ebx)
+        cmpw $1999, LOCATION(%edi)
         ja error_free
 
         xorl %eax, %eax                         # clear regs
         xorb %cl, %cl
 
-        movb ON_CHAR(%ebx), %cl                 # set up args for poke
-        movw LOCATION(%ebx), %ax                        
+        movb ON_CHAR(%edi), %cl                 # set up args for poke
+        movw LOCATION(%edi), %ax                        
         addw %ax, %ax                           # multiply location by 2
         call mp1_poke
 
@@ -315,9 +315,11 @@ mp1_ioctl_find:
         ja find_err_malloc
 
         movw LOCATION(%edi), %si
+        push %ecx                       # caller save ecx
         push %esi
         call search_list
         addl $4, %esp
+        pop %ecx
         cmpl $0, %eax
         je find_err_malloc
 
@@ -450,6 +452,7 @@ search_list:
         xorl %ebx, %ebx                 # clear regs
         xorl %esi, %esi
         xorl %edi, %edi  
+        #xorl %ecx, %ecx
 
         movl 8(%ebp), %ebx              # ebx = arg
         movl mp1_list_head, %edi             # edi = list ptr
