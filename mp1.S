@@ -283,47 +283,61 @@ mp1_ioctl_find:
         push %edi
         
         testl %ebx, %ebx                # if ebx (arg) == null, return error
-        jz err_find
+        jz find_err
         
-        push $STRUCT_SIZE               # push 16
-        call mp1_malloc                 # allocate new memory
-        testl %eax, %eax                # if eax == null, return error
-        jz err_find
+        push $STRUCT_SIZE
+        call mp1_malloc
+        addl $4, %esp
+        cmpl $0, %eax
+        je find_err
 
-        movl %eax, %edi                 # copy address of malloc to edi 
-        push %ebx                       # push args
-        push %eax                      
-        call mp1_copy_from_user         # copy from user
-        addl $12, %esp                  # remove args
-        testl %eax, %eax                # if result != 0, return error
-        jnz err_free_find
+        movl %eax, %edi
+        
+        push $STRUCT_SIZE
+        push %ebx
+        push %eax
+        call mp1_copy_from_user
+        addl $12, %esp
+        cmpl $0, %eax
+        jne find_err_malloc
 
-        movw LOCATION(%edi), %ax
-        push %ecx                       # caller save ecx
-        push %eax                            # push args for search list
+        cmpw $0, LOCATION(%edi)                 # check if location is between 0-1999
+        jb find_err_malloc
+        cmpw $1999, LOCATION(%edi)
+        ja find_err_malloc
+
+        movw LOCATION(%edi), %esi
+        push %esi
         call search_list
-        add $4, %esp                    # pop args
-        pop %ecx                        # caller restore ecx
+        addl $4, %esp
+        cmpl $0, %eax
+        je find_err_malloc
 
-        testl %eax, %eax                # if search returns null, error
-        jz err_free_find
-
-        push $STRUCT_SIZE               # push args for copy
+        push $STRUCT_SIZE
         push %eax
         push %ebx
         call mp1_copy_to_user
-        addl $12, %esp                   # pop args
-        testl %eax, %eax                # if result != 0, return error
-        jnz err_free_find
+        add $12, %esp
+        cmpl $0, %eax
+        jne find_err_malloc
+        xorl %eax, %eax
+        jmp find_deall
 
-        xorl %eax, %eax                 # return = 0
-        jmp find_done
-err_free_find:
-        push %ecx                       # push address of malloc
+find_deall:
+        push %edi
         call mp1_free
         addl $4, %esp
-err_find:
+        xorl %eax, %eax
+        jmp find_done
+
+find_err_malloc:
+        push %edi
+        call mp1_free
+        addl $4, %esp
         movl $-1, %eax
+        jmp find_done
+find_err:
+        movl $-1, %eax    
 find_done: 
         pop %edi                        # callee restore
         pop %esi
