@@ -177,13 +177,16 @@ mp1_ioctl_add:
         testl %eax, %eax                # if result != 0, return error
         jnz error_free
 
-        movw ON_LENGTH(%ebx), %ax       # ax = on length
-        movw %ax, COUNTDOWN(%ebx)       # countdown = ax
-        movw $1, STATUS(%ebx)           # status = 1
+        movw ON_LENGTH(%edi), %ax       # ax = on length
+        movw %ax, COUNTDOWN(%edi)       # countdown = ax
+        movw $1, STATUS(%edi)           # status = 1
+
+
 
         movl mp1_list_head, %ecx        # insert struct at head
+        movl %edi, mp1_list_head  
         movl %ecx, NEXT(%edi)           
-        movl %edi, mp1_list_head        
+              
 
         cmpw $0, LOCATION(%ebx)                 # check if location is between 0-1999
         jb error_free
@@ -222,12 +225,67 @@ error_free:
         ret
         
 mp1_ioctl_remove:
+        push %ebp                       # save and update ebp
+        movl %esp, %ebp
+        push %ebx                       # callee save
+        push %esi
+        push %edi
+
+        
+        push %ebx                       # push args, search, pop args
+        call search_list
+        addl $4, %esp
+        testl %eax, %eax                # if search returns null, error
+        jz remove_err
+        testl %ecx, %ecx                # if search returns null, error
+        jz remove_err
+
+        cmpl %eax, mp1_list_head        # check if need to remove head
+        je remove_head
+        cmpl $0, NEXT(%eax)             # check if remove tail
+        je remove_tail
+
+        movl NEXT(%eax), %edi                 # edi = next struct
+        movl %edi, NEXT(%ecx)
+
+        push %eax                       # push address struct to remove
+        call mp1_free
+        addl $4, %esp 
+
+        xorl %eax, %eax                 # return = 0
+        jmp remove_done
+
+remove_tail:
+        movl $0, NEXT(%ecx)
+        push %eax                       # push address struct to remove
+        call mp1_free
+        addl $4, %esp
+
+        xorl %eax, %eax                 # return = 0
+        jmp remove_done
+
+remove_head:
+        movl NEXT(%eax), %edi                 # edi = next struct
+        movl %edi, mp1_list_head                      # push address struct to remove
+        push %eax                       # push address struct to remove
+        call mp1_free
+        addl $4, %esp 
+
+        xorl %eax, %eax                 # return = 0
+        jmp remove_done
+
+remove_err:
+        movl $-1, %eax
+remove_done:        
+        pop %edi                        # callee restore
+        pop %esi
+        pop %ebx
+        leave
         ret
 
 # ebx = arg
 # eax = various ret values        
 mp1_ioctl_find:
-        ret
         push %ebp                       # save and update ebp
         movl %esp, %ebp
         push %ebx                       # callee save
@@ -251,9 +309,11 @@ mp1_ioctl_find:
         jnz err_free_find
 
         movw LOCATION(%edi), %ax
+        push %ecx                       # caller save ecx
         push %eax                            # push args for search list
         call search_list
         add $4, %esp                    # pop args
+        pop %ecx                        # caller restore ecx
 
         testl %eax, %eax                # if search returns null, error
         jz err_free_find
@@ -282,7 +342,6 @@ find_done:
 	ret
 
 mp1_ioctl_sync:
-        ret
         push %ebp                       # save and update ebp
         movl %esp, %ebp
         push %ebx                       # callee save
@@ -293,16 +352,20 @@ mp1_ioctl_sync:
         shrl $16, %ebx
         movw %bx, %di                   # di = 1st integer (high 16bits)
 
+        push %ecx                       # caller save ecx
         push %edi                        # push args for search list
         call search_list
         addl $4, %esp                    # pop args
+        pop %ecx                        # caller restore ecx
         testl %eax, %eax                # if search returns null, error
         jz sync_err
         movl %eax, %edi                 # edi = address of struct matching integer 1
 
+        push %ecx                       # caller save ecx
         push %esi                        # push args for search list
         call search_list
         addl $4, %esp                    # pop args
+        pop %ecx                        # caller restore ecx
         testl %eax, %eax                # if search returns null, error
         jz sync_err
         movl %eax, %esi                 # edi = address of struct matching integer 2
@@ -361,9 +424,10 @@ sync_done:
         ret
 
 # ret_ptr search_list(arg) in c-style convention
-# return matching ptr 
-# returns null if failed
-# no clobbers
+# return: eax = target ptr
+#        ecx = prev ptr
+#       returns null if failed
+# clobbers ecx
 search_list:
         push %ebp                       # save and update ebp
         movl %esp, %ebp
@@ -376,12 +440,15 @@ search_list:
 
         movl 8(%ebp), %ebx              # ebx = arg
         movl mp1_list_head, %edi             # edi = list ptr
+        cmpl $0, mp1_list_head          # check if head is null
+        je err_search
 
 loop_search:
-        movw LOCATION(%edi), %si         # ecx = cur struct arg
+        movw LOCATION(%edi), %si         # 
         cmpw %si, %bx                  # check if arg found
         je found
 
+        movl %edi, %ecx                 # hold prev pointer in ecx
         movl NEXT(%edi), %edi           # edi = next->struct
         testl %edi, %edi                # if null ptr,    
         jz err_search
