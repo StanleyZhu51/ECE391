@@ -40,198 +40,205 @@ mp1_poke:
 	movb    %cl,(%edx,%eax,1)
 	ret
 
-
+# void mp1_rtc_tasklet()
+# Description: Loops through the linked list to check and update (poke) each item inside based on status and countdown
+# Interface: C-style
+#    Inputs: Uses mp1_list_head (global var)
+#   Outputs: Void
+# Registers: 
 # esi = cur struct
-# di = countdown
+# di = countdown / on_length
+# ax = location
+# bx = status
 mp1_rtc_tasklet:
-        push %ebp                       # save and update ebp
+        push %ebp                               # save and update ebp
         movl %esp, %ebp
-        push %ebx                       # callee save
+        push %ebx                               # callee save
         push %esi
         push %edi
-        xorl %ebx, %ebx                 # clear regs
+        xorl %ebx, %ebx                         # clear regs
         xorl %esi, %esi
         xorl %edi, %edi
                                         
-        movl mp1_list_head, %esi        # esi = list head
+        movl mp1_list_head, %esi                # esi = list head
         testl %esi, %esi
-        jz tasklet_end                  # check if head == null
+        jz tasklet_end                          # check if head == null
 loop:      
-        decw COUNTDOWN(%esi)            # decrement countdown
-        movw COUNTDOWN(%esi), %di       # di = countdown
-        testw %di, %di                  # if di != 0, jump loop
-        jnz next_struct                        # else, continue to check status
-
-# bx = status
+        decw COUNTDOWN(%esi)                    # decrement countdown
+        movw COUNTDOWN(%esi), %di              
+        testw %di, %di                          # if countdown != 0, jump next_struct
+        jnz next_struct                         # else, continue to check status
 check_status:
-        xorl %ebx, %ebx                 # clear regs
-        movw STATUS(%esi), %bx          # bx = status
-        testw %bx, %bx                  # if status == 0, jump to_on
-        jz to_on                        # else, jump to_off
+        xorl %ebx, %ebx                         # clear regs
+        movw STATUS(%esi), %bx         
+        testw %bx, %bx                          # if status == 0, jump to_on
+        jz to_on                                # else, jump to_off
         jmp to_off
-
-# cl = on char
-# ax = location
-# di = on length
-to_on:                                  # change pixel on
-        xorl %eax, %eax                 # clear regs
+to_on:                                          # change pixel on
+        xorl %eax, %eax                         # clear regs
         xorb %cl, %cl
         xorl %edi, %edi
-                                        # setup args for poke
-        movb ON_CHAR(%esi), %cl         # cl = on char 
-        movw LOCATION(%esi), %ax        # ax = location
+                                        
+        movb ON_CHAR(%esi), %cl                 # setup args for poke
+        movw LOCATION(%esi), %ax       
 
-        cmpw $0, %ax                    # check if location is between 0-1999
+        cmpw $0, %ax                            # check if location is between 0-1999
         jb next_struct
         cmpw $1999, %ax
         ja next_struct
         
-        addw %ax, %ax                   # multiply location by 2
+        addw %ax, %ax                           # multiply location by 2
         call mp1_poke
 
-        movw ON_LENGTH(%esi), %di       # di = on length
-        movw %di, COUNTDOWN(%esi)       # countdown = on length
-        movw $1, STATUS(%esi)           # status = 1
-        jmp next_struct                 # go to next struct
-
-# cl = off char
-# ax = location
-# di = off length
-to_off:                                 # change pixel on
-        xorl %eax, %eax                 # clear regs
+        movw ON_LENGTH(%esi), %di              
+        movw %di, COUNTDOWN(%esi)               # countdown = on_length
+        movw $1, STATUS(%esi)                   # status = 1
+        jmp next_struct                         # go to next struct
+to_off:                                         # change pixel off
+        xorl %eax, %eax                         # clear regs
         xorb %cl, %cl
         xorl %edi, %edi
-                                        # setup args for poke
-        movb OFF_CHAR(%esi), %cl        # cl = off char 
-        movw LOCATION(%esi), %ax        # ax = location
+                                        
+        movb OFF_CHAR(%esi), %cl                # setup args for poke
+        movw LOCATION(%esi), %ax        
 
-        cmpw $0, %ax                    # check if location is between 0-1999
+        cmpw $0, %ax                            # check if location is between 0-1999
         jb next_struct
         cmpw $1999, %ax
         ja next_struct
 
-        addw %ax, %ax                   # multiply location by 2
+        addw %ax, %ax                           # multiply location by 2
         call mp1_poke
 
-        movw OFF_LENGTH(%esi), %di      # di = off length
-        movw %di, COUNTDOWN(%esi)       # countdown = off length
-        movw $0, STATUS(%esi)           # status = 0
-        jmp next_struct                # go to next struct
-
+        movw OFF_LENGTH(%esi), %di              
+        movw %di, COUNTDOWN(%esi)               # countdown = off_length
+        movw $0, STATUS(%esi)                   # status = 0
+        jmp next_struct                         # go to next struct
 next_struct:
-        movl NEXT(%esi), %esi           # esi (cur struct) = next struct
-        testl %esi, %esi                # if esi != 0, jump loop
-        jnz loop                        # else, end function
-
+        movl NEXT(%esi), %esi                   # cur struct = next struct
+        testl %esi, %esi                        # if esi != 0, jump loop
+        jnz loop                                # else, end function
 tasklet_end:        
-        pop %edi                        # callee restore
+        pop %edi                                # callee restore
         pop %esi
         pop %ebx
         leave
 	ret
 
 mp1_ioctl:
-        xorl %ebx, %ebx                 # clear regs
+        xorl %ebx, %ebx                         # clear regs
         xorl %esi, %esi
         xorl %edi, %edi
 
-        movl 4(%esp), %ebx              # ebx <- arg
-        movl 8(%esp), %esi             # esi <- cmd
+        movl 4(%esp), %ebx                      # ebx <- arg
+        movl 8(%esp), %esi                      # esi <- cmd
 
-        cmpl $3, %esi                   # check cmd is between 0-3
+        cmpl $3, %esi                           # check cmd is between 0-3
         ja error
         cmpl $0, %esi
         jb error
-        jmp *jumptable(,%esi,4)         # jump
+        jmp *jumptable(,%esi,4)                 # jump
 error:
-        movl $-1, %eax                  # return value = -1
+        movl $-1, %eax                          # return value = -1
 	ret
 
-
-# Register table
+# int mp1_ioctl_add(struct * arg)
+# Description: adds a user level ptr to a struct to the linked list
+# Interface: C-style
+#    Inputs: arg (ptr to struct that should be added)
+#   Outputs: 0 if success, -1 if fail
+# Registers: 
 # ebx = arg
 # edi = address of new struct
 # ecx = temp reg
-# eax = return values
+# eax = various return values
 mp1_ioctl_add:
-        push %ebp                       # save and update ebp
+        push %ebp                               # save and update ebp
         movl %esp, %ebp
-        push %ebx                       # callee save
+        push %ebx                               # callee save
         push %esi
         push %edi
 
-        testl %ebx, %ebx                # if ebx (arg) == null, return error
+        testl %ebx, %ebx                        # if ebx (arg) == null, return error
         jz error_add
         
-        push $STRUCT_SIZE               # push 16
-        call mp1_malloc                 # allocate new memory
-        testl %eax, %eax                # if eax == null, return error
+        push $STRUCT_SIZE                       # push 16
+        call mp1_malloc                         # allocate new memory
+        testl %eax, %eax                        # if eax == null, return error
         jz error_add
 
-        movl %eax, %edi                 # copy address of malloc to edi
+        movl %eax, %edi                         # copy address of malloc to edi
 
-        push %ebx                       # push args
+        push %ebx                               # push args
         push %eax                      
-        call mp1_copy_from_user         # copy from user
-        add $12, %esp                   # remove args
-        testl %eax, %eax                # if result != 0, return error
+        call mp1_copy_from_user                 # copy from user
+        add $12, %esp                           # remove args
+        testl %eax, %eax                        # if result != 0, return error
         jnz error_free
 
-        movw ON_LENGTH(%edi), %ax       # ax = on length
-        movw %ax, COUNTDOWN(%edi)       # countdown = ax
-        movw $1, STATUS(%edi)           # status = 1
+        movw ON_LENGTH(%edi), %ax     
+        movw %ax, COUNTDOWN(%edi)               # countdown = on_length
+        movw $1, STATUS(%edi)                   # status = 1
 
-
-
-        movl mp1_list_head, %ecx        # insert struct at head
+        movl mp1_list_head, %ecx                # insert struct at head
         movl %edi, mp1_list_head  
         movl %ecx, NEXT(%edi)           
               
-
         cmpw $0, LOCATION(%ebx)                 # check if location is between 0-1999
         jb error_free
         cmpw $1999, LOCATION(%ebx)
         ja error_free
 
-        xorl %eax, %eax                 # clear regs
+        xorl %eax, %eax                         # clear regs
         xorb %cl, %cl
 
-        movb ON_CHAR(%ebx), %cl         # cl = on_char
-        movw (%ebx), %ax                # ax = location
-        addw %ax, %ax                   # multiply location by 2
+        movb ON_CHAR(%ebx), %cl                 # set up args for poke
+        movw (%ebx), %ax                        
+        addw %ax, %ax                           # multiply location by 2
         call mp1_poke
 
-        xorl %eax, %eax                 # return = 0
-        pop %edi                        # callee restore
+        xorl %eax, %eax                         # return = 0
+        pop %edi                                # callee restore
         pop %esi
         pop %ebx
         leave
 	ret
 error_add:
-        pop %edi                        # callee restore
+        pop %edi                                # callee restore
         pop %esi
         pop %ebx
-        movl $-1, %eax                  # return value = -1
+        movl $-1, %eax                          # return value = -1
         leave
 	ret
 error_free:
-        pop %edi                        # callee restore
+        pop %edi                                # callee restore
         pop %esi
         pop %ebx
-        push %ecx                       # push address of malloc
+        push %ecx                               # push address of malloc
         call mp1_free
         addl $4, %esp                      
         leave
         ret
-        
+
+
+# int mp1_ioctl_remove(struct * arg)
+# Description: removes a struct from the linked list
+# Interface: C-style
+#    Inputs: arg (ptr to struct that should be added)
+#   Outputs: 0 if success, -1 if fail
+# Registers: 
+# ebx = arg
+# edi = address of new struct
+# ecx = temp reg
+# eax = various return values
 mp1_ioctl_remove:
-        push %ebp                       # save and update ebp
+        ret
+        push %ebp                               # save and update ebp
         movl %esp, %ebp
-        push %ebx                       # callee save
+        push %ebx                               # callee save
         push %esi
         push %edi
 
-        
         push %ebx                       # push args, search, pop args
         call search_list
         addl $4, %esp
@@ -275,7 +282,7 @@ remove_done:
 # ebx = arg
 # eax = various ret values        
 mp1_ioctl_find:
-        
+        ret
         push %ebp                       # save and update ebp
         movl %esp, %ebp
         push %ebx                       # callee save
@@ -306,7 +313,7 @@ mp1_ioctl_find:
         cmpw $1999, LOCATION(%edi)
         ja find_err_malloc
 
-        movw LOCATION(%edi), %esi
+        movw LOCATION(%edi), %si
         push %esi
         call search_list
         addl $4, %esp
@@ -346,6 +353,7 @@ find_done:
 	ret
 
 mp1_ioctl_sync:
+        ret
         push %ebp                       # save and update ebp
         movl %esp, %ebp
         push %ebx                       # callee save
