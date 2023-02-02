@@ -242,8 +242,6 @@ mp1_ioctl_remove:
 
         cmpl %eax, mp1_list_head        # check if need to remove head
         je remove_head
-        cmpl $0, NEXT(%eax)             # check if remove tail
-        je remove_tail
 
         movl NEXT(%eax), %edi                 # edi = next struct
         movl %edi, NEXT(%ecx)
@@ -251,15 +249,6 @@ mp1_ioctl_remove:
         push %eax                       # push address struct to remove
         call mp1_free
         addl $4, %esp 
-
-        xorl %eax, %eax                 # return = 0
-        jmp remove_done
-
-remove_tail:
-        movl $0, NEXT(%ecx)
-        push %eax                       # push address struct to remove
-        call mp1_free
-        addl $4, %esp
 
         xorl %eax, %eax                 # return = 0
         jmp remove_done
@@ -286,6 +275,7 @@ remove_done:
 # ebx = arg
 # eax = various ret values        
 mp1_ioctl_find:
+        
         push %ebp                       # save and update ebp
         movl %esp, %ebp
         push %ebx                       # callee save
@@ -319,7 +309,7 @@ mp1_ioctl_find:
         jz err_free_find
 
         push $STRUCT_SIZE               # push args for copy
-        push %edi
+        push %eax
         push %ebx
         call mp1_copy_to_user
         addl $12, %esp                   # pop args
@@ -378,9 +368,9 @@ mp1_ioctl_sync:
         movw %bx, COUNTDOWN(%esi)
         movw STATUS(%edi), %bx         # assign 1's status to 2
         movw %bx, STATUS(%esi)
-        testw %bx, %bx                  # if status == 0, add
+        testw %bx, %bx                  # if status == 0, 
         jz stat_zero
-stat_one:
+stat_zero:
         xorl %eax, %eax                 # clear regs
         xorb %cl, %cl
 
@@ -397,7 +387,7 @@ stat_one:
         movw $0, STATUS(%esi)
         xorl %eax, %eax                         # return = 0
         jmp sync_done
-stat_zero:
+stat_one:
         xorl %eax, %eax                 # clear regs
         xorb %cl, %cl
 
