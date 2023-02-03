@@ -126,10 +126,6 @@ tasklet_end:
 	ret
 
 mp1_ioctl:
-        xorl %ebx, %ebx                         # clear regs
-        xorl %esi, %esi
-        xorl %edi, %edi
-
         movl 4(%esp), %ebx                      # ebx <- arg
         movl 8(%esp), %esi                      # esi <- cmd
 
@@ -158,13 +154,15 @@ mp1_ioctl_add:
         push %ebx                               # callee save
         push %esi
         push %edi
+        xorl %esi, %esi
+        xorl %edi, %edi
 
         testl %ebx, %ebx                        # if ebx (arg) == null, return error
         jz error_add
         
         push $STRUCT_SIZE                       # push 16
         call mp1_malloc                         # allocate new memory
-        add $4, %esp                           # remove args
+        addl $4, %esp                           # remove args
         testl %eax, %eax                        # if eax == null, return error
         jz error_add
 
@@ -174,7 +172,7 @@ mp1_ioctl_add:
         push %ebx                               # push args
         push %eax                      
         call mp1_copy_from_user                 # copy from user
-        add $12, %esp                           # remove args
+        addl $12, %esp                          # remove args
         testl %eax, %eax                        # if result != 0, return error
         jnz error_free
 
@@ -193,7 +191,6 @@ mp1_ioctl_add:
 
         xorl %eax, %eax                         # clear regs
         xorb %cl, %cl
-
         movb ON_CHAR(%edi), %cl                 # set up args for poke
         movw LOCATION(%edi), %ax                        
         addw %ax, %ax                           # multiply location by 2
@@ -206,107 +203,116 @@ mp1_ioctl_add:
         leave
 	ret
 error_add:
+        movl $-1, %eax                          # return value = -1
         pop %edi                                # callee restore
         pop %esi
         pop %ebx
-        movl $-1, %eax                          # return value = -1
         leave
 	ret
 error_free:
+        push %edi                               # push address of malloc
+        call mp1_free
+        addl $4, %esp 
+        movl $-1, %eax                          # return value = -1
         pop %edi                                # callee restore
         pop %esi
-        pop %ebx
-        push %ecx                               # push address of malloc
-        call mp1_free
-        addl $4, %esp                      
+        pop %ebx                          
         leave
         ret
-
 
 # int mp1_ioctl_remove(struct * arg)
 # Description: removes a struct from the linked list
 # Interface: C-style
-#    Inputs: arg (ptr to struct that should be added)
+#    Inputs: arg (ptr to struct that should be removed)
 #   Outputs: 0 if success, -1 if fail
 # Registers: 
 # ebx = arg
-# edi = address of new struct
-# ecx = temp reg
-# eax = various return values
+# edi = temp 
+# ecx = ptr to prev struct
+# eax = ptr to remove struct / return value
 mp1_ioctl_remove:
         push %ebp                               # save and update ebp
         movl %esp, %ebp
         push %ebx                               # callee save
         push %esi
         push %edi
+        xorl %esi, %esi                         # clear regs
+        xorl %edi, %edi
 
-        push %ebx                       # push args, search, pop args
+        push %ebx                               # push args, search, pop args
         call search_list
         addl $4, %esp
-        testl %eax, %eax                # if search returns null, error
-        jz remove_err
-        testl %ecx, %ecx                # if search returns null, error
+        testl %eax, %eax                        # if search returns null, error
         jz remove_err
 
-        cmpl %eax, mp1_list_head        # check if need to remove head
+        cmpl %eax, mp1_list_head                # check if need to remove head
         je remove_head
 
-        movl NEXT(%eax), %edi                 # edi = next struct
+        movl NEXT(%eax), %edi                   # edi = next struct
         movl %edi, NEXT(%ecx)
 
-        push %eax                       # push address struct to remove
+        push %eax                               # push address struct to remove
         call mp1_free
         addl $4, %esp 
 
-        xorl %eax, %eax                 # return = 0
+        xorl %eax, %eax                         # return = 0
         jmp remove_done
 
-remove_head:
-        movl NEXT(%eax), %edi                 # edi = next struct
-        movl %edi, mp1_list_head                      # push address struct to remove
-        push %eax                       # push address struct to remove
+remove_head:                                    # head removal
+        movl NEXT(%eax), %edi                   # edi = next struct
+        movl %edi, mp1_list_head                # push address struct to remove
+        push %eax                               # push address struct to remove
         call mp1_free
         addl $4, %esp 
 
-        xorl %eax, %eax                 # return = 0
+        xorl %eax, %eax                         # return = 0
         jmp remove_done
 
 remove_err:
-        movl $-1, %eax
+        movl $-1, %eax                          # return = -1
 remove_done:        
-        pop %edi                        # callee restore
+        pop %edi                                # callee restore
         pop %esi
         pop %ebx
         leave
         ret
 
+# int mp1_ioctl_find(struct * arg)
+# Description: given a userlevel ptr to a struct, copies struct to kernel space to read its location. 
+#              Then traverse the linked list to find a matching location and copy its properties back to the userlevel struct
+# Interface: C-style
+#    Inputs: arg (user level ptr to struct)
+#   Outputs: 0 if success, -1 if fail
+# Registers: 
 # ebx = arg
+# edi = address to the newly allocated space
 # eax = various ret values        
 mp1_ioctl_find:
-        ret
-        push %ebp                       # save and update ebp
+        push %ebp                               # save and update ebp
         movl %esp, %ebp
-        push %ebx                       # callee save
+        push %ebx                               # callee save
         push %esi
         push %edi
+        xorl %esi, %esi                         # clear regs
+        xorl %edi, %edi
         
-        testl %ebx, %ebx                # if ebx (arg) == null, return error
+        testl %ebx, %ebx                        # if ebx (arg) == null, return error
         jz find_err
         
-        push $STRUCT_SIZE
-        call mp1_malloc
-        addl $4, %esp
-        cmpl $0, %eax
+        push $STRUCT_SIZE                       # push struct_size
+        call mp1_malloc                         # allocate new memory for struct
+        addl $4, %esp                           # pop args
+        cmpl $0, %eax                           # if return == 0, error
         je find_err
 
-        movl %eax, %edi
+        movl %eax, %edi                         # copy address of malloc to edi
         
-        push $STRUCT_SIZE
+        push $STRUCT_SIZE                       # push args 
         push %ebx
         push %eax
-        call mp1_copy_from_user
-        addl $12, %esp
-        cmpl $0, %eax
+        call mp1_copy_from_user                 # copy from user
+        addl $12, %esp                          # pop args
+        cmpl $0, %eax                           # if return == 0, error
         jne find_err_malloc
 
         cmpw $0, LOCATION(%edi)                 # check if location is between 0-1999
@@ -314,54 +320,55 @@ mp1_ioctl_find:
         cmpw $1999, LOCATION(%edi)
         ja find_err_malloc
 
-        movw LOCATION(%edi), %si
-        push %ecx                       # caller save ecx
+        movw LOCATION(%edi), %si                # si = location
+        push %ecx                               # caller save ecx
         push %esi
-        call search_list
-        addl $4, %esp
+        call search_list                        # search list
+        addl $4, %esp                           # pop args, caller restore
         pop %ecx
-        cmpl $0, %eax
-        je find_err_malloc
+        cmpl $0, %eax                           # if result == 0, error
+        je find_err_malloc      
 
-        push $STRUCT_SIZE
+        push $STRUCT_SIZE                       # push args
         push %eax
         push %ebx
-        call mp1_copy_to_user
-        add $12, %esp
-        cmpl $0, %eax
+        call mp1_copy_to_user                   # copy to user
+        add $12, %esp                           # pop args
+        cmpl $0, %eax                           # if result != 0, error
         jne find_err_malloc
-        xorl %eax, %eax
+        xorl %eax, %eax                         # return = 0
         jmp find_deall
 
 find_deall:
-        push %edi
-        call mp1_free
+        push %edi                               
+        call mp1_free                           # deallocates memory, returns 0
         addl $4, %esp
         xorl %eax, %eax
         jmp find_done
 
 find_err_malloc:
         push %edi
-        call mp1_free
+        call mp1_free                           # deallocates memory, returns -1
         addl $4, %esp
         movl $-1, %eax
         jmp find_done
 find_err:
-        movl $-1, %eax    
+        movl $-1, %eax                          # return = -1
 find_done: 
-        pop %edi                        # callee restore
+        pop %edi                                # callee restore
         pop %esi
         pop %ebx
         leave
 	ret
 
 mp1_ioctl_sync:
-        ret
         push %ebp                       # save and update ebp
         movl %esp, %ebp
         push %ebx                       # callee save
         push %esi
         push %edi
+        xorl %esi, %esi                 # clear regs
+        xorl %edi, %edi
 
         movw %bx, %si                   # si = 2nd integer (low 16bits)
         shrl $16, %ebx
@@ -481,10 +488,6 @@ end_search:
         leave
         ret
 
-
-
 jumptable:
         .long mp1_ioctl_add, mp1_ioctl_remove, mp1_ioctl_find, mp1_ioctl_sync
-
-
 .end
