@@ -139,7 +139,7 @@ error:
 	ret
 
 # int mp1_ioctl_add(struct * arg)
-# Description: adds a user level ptr to a struct to the linked list
+# Description: adds a user level ptr to a struct to the linked list and pokes it
 # Interface: C-style
 #    Inputs: arg (ptr to struct that should be added)
 #   Outputs: 0 if success, -1 if fail
@@ -221,7 +221,7 @@ error_free:
         ret
 
 # int mp1_ioctl_remove(struct * arg)
-# Description: removes a struct from the linked list
+# Description: given a location, removes a struct with the matching location from the linked list
 # Interface: C-style
 #    Inputs: arg (ptr to struct that should be removed)
 #   Outputs: 0 if success, -1 if fail
@@ -362,7 +362,7 @@ find_done:
 	ret
 
 # int mp1_ioctl_sync(int arg)
-# Description: Given to locations from arg, syncs the blinking from location 1 to location 2
+# Description: Given two locations from arg, syncs the blinking from location 1 to location 2
 # Interface: C-style
 #    Inputs: arg (32bit int)
 #            location 1 = high 16bits, location 2 = low 16bits
